@@ -1,14 +1,18 @@
 package com.clubManager.baseDatosClub.servicios;
 
-import java.io.FileNotFoundException;
+import java.io.FileInputStream;
 import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+import java.io.FileNotFoundException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.LocalDate;
 import java.util.HashSet;
-import java.util.List;
+
 import java.util.Set;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,6 +25,8 @@ import com.clubManager.baseDatosClub.entidades.Notificacion;
 import com.clubManager.baseDatosClub.entidades.Padre;
 import com.clubManager.baseDatosClub.repositorios.NotificacionRepositorio;
 import com.google.auth.oauth2.GoogleCredentials;
+
+import jakarta.validation.Path;
 
 /**
  * Servicio encargado de enviar notificaciones push a los miembros de un equipo
@@ -127,28 +133,32 @@ public class NotificacionPushServicio {
      * Obtiene un token de acceso OAuth2 válido usando la cuenta de servicio de Firebase.
      */
     
-    private String obtenerAccessToken() throws Exception 
-    {
-        try (InputStream serviceAccount = getClass().getClassLoader().getResourceAsStream("service-account.json")) {
-            if (serviceAccount == null)
-            {
-                throw new FileNotFoundException("No se encontró service-account.json en el classpath");
-            }
+    private String obtenerAccessToken() throws Exception {
+        // Leemos el JSON completo de la variable de entorno
+        String serviceAccountJson = System.getenv("FCM_SERVICE_ACCOUNT_JSON");
+        if (serviceAccountJson == null || serviceAccountJson.isEmpty()) {
+            throw new IllegalStateException("No se encontró la variable de entorno FCM_SERVICE_ACCOUNT_JSON");
+        }
 
+        // Escribimos temporalmente en un archivo
+        Path tempFile = Files.createTempFile("service-account", ".json");
+        Files.writeString(tempFile, serviceAccountJson);
+
+        try (InputStream serviceAccount = new FileInputStream(tempFile.toFile())) {
             GoogleCredentials googleCredentials = GoogleCredentials
                     .fromStream(serviceAccount)
                     .createScoped(List.of("https://www.googleapis.com/auth/firebase.messaging"));
 
             googleCredentials.refreshIfExpired();
 
-            if (googleCredentials.getAccessToken() == null) 
-            {
+            if (googleCredentials.getAccessToken() == null) {
                 googleCredentials.refresh();
             }
 
             return googleCredentials.getAccessToken().getTokenValue();
         }
     }
+
 
     /**
      * Guarda la notificación en la base de datos asociada al equipo indicado.
